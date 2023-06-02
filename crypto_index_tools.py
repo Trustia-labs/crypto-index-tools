@@ -1,4 +1,5 @@
 import requests
+from functools import reduce
 from binance.client import Client
 from PyInquirer import prompt
 import pandas as pd
@@ -12,15 +13,13 @@ def format_market_cap(market_cap):
         return f'{market_cap / 1e3:.2f}K'
     else:
         return f'{market_cap:.2f}'
-
-def calculate_portfolio_percentages(products, weighting_distribution):
+    
+def calculate_portfolio_percentage(product, products, totalmcap, weighting_distribution):
     if weighting_distribution == 'Equal':
-        equal_weight = 1 / len(products)
-        return [equal_weight] * len(products)
+        equal_weight = 1 / len(products) * 100
+        return equal_weight
     else:  # Market cap based
-        total_market_cap = sum(product['market_cap'] for product in products)
-        return [product['market_cap'] / total_market_cap for product in products]
-
+        return product['market_cap'] / totalmcap * 100
 
 client = Client()
 
@@ -75,13 +74,6 @@ answers = prompt(questions)
 selected_products_symbols = set(answers['selected_products'])
 filtered_products = [product for product in filtered_products if product['s'] in selected_products_symbols]
 
-
-# Calculate market cap for each product
-for product in filtered_products:
-    cs = float(product['cs']) if product['cs'] is not None else 0
-    c = float(product['c']) if product['c'] is not None else 0
-    product['market_cap'] = cs * c
-
 # Prompt user to select the number of top products to display
 questions = [
     {
@@ -94,7 +86,6 @@ questions = [
 ]
 
 top_x = prompt(questions)['top_x']
-
 
 # Add a question to ask the user about the desired weighting distribution
 questions = [
@@ -109,19 +100,22 @@ questions = [
 answers = prompt(questions)
 weighting_distribution = answers['weighting_distribution']
 
+total_market_cap = sum(product['cs']*product['c'] for product in filtered_products)
+
+# Calculate market cap for each product
+for product in filtered_products:
+    cs = float(product['cs']) if product['cs'] is not None else 0
+    c = float(product['c']) if product['c'] is not None else 0
+    product['market_cap'] = cs * c
+    product['percentage'] = calculate_portfolio_percentage(product, filtered_products, total_market_cap, weighting_distribution)
 
 # Sort filtered products by market cap and select the top x
 sorted_filtered_products = sorted(filtered_products, key=lambda x: x['market_cap'], reverse=True)[:top_x]
-portfolio_percentages = calculate_portfolio_percentages(sorted_filtered_products, weighting_distribution)
 
 # Display top x filtered products as a table
 df = pd.DataFrame(sorted_filtered_products)
 df['market_cap'] = df['market_cap'].apply(format_market_cap)
-df = df[['s', 'b', 'q', 'tags', 'market_cap']]
-df.columns = ['symbol', 'baseAsset', 'quoteAsset', 'tags', 'market_cap']
-
+df = df[['s', 'b', 'q', 'tags', 'market_cap', 'percentage']]
+df.columns = ['symbol', 'baseAsset', 'quoteAsset', 'tags', 'market_cap', 'weight']
 
 print(df)
-
-
-#
