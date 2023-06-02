@@ -72,7 +72,9 @@ questions = [
 
 answers = prompt(questions)
 selected_products_symbols = set(answers['selected_products'])
-filtered_products = [product for product in filtered_products if product['s'] in selected_products_symbols]
+filtered_products = [product for product in filtered_products 
+                     if (product['s'] in selected_products_symbols 
+                         and product['cs'] is not None)]
 
 # Prompt user to select the number of top products to display
 questions = [
